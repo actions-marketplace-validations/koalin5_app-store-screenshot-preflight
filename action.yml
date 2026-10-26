@@ -1,0 +1,21 @@
+name: App Store Screenshot Preflight
+description: Check iPhone and iPad screenshot sizes, PNG transparency, and per-locale counts before App Store Connect upload.
+inputs:
+  paths:
+    description: Screenshot files or locale folders, one path per line. Folder scans are not recursive.
+    required: true
+runs:
+  using: composite
+  steps:
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '22'
+    - name: Check screenshots
+      shell: bash
+      env:
+        SCREENSHOT_PATHS: ${{ inputs.paths }}
+      run: bash "$GITHUB_ACTION_PATH/run-action.sh"
+branding:
+  icon: image
+  color: blue

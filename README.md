@@ -2,7 +2,24 @@
 
 A small, dependency-free Node.js check for iOS and iPadOS screenshot sets. Run it on your own files before opening App Store Connect or add it to CI. It checks PNG/JPEG headers, pixel dimensions for current iPhone and iPad display classes, PNG alpha/transparency, and Apple's limit of ten screenshots per device size. Files stay on your machine.
 
-## Run it
+## Run it in GitHub Actions
+
+Add a step after checkout. Each line in `paths` is a file or one locale folder; files stay on the GitHub runner. A failed check fails the workflow with the filename and reason.
+
+```yaml
+steps:
+  - uses: actions/checkout@v4
+  - name: Check App Store screenshots
+    uses: koalin5/app-store-screenshot-preflight@v1
+    with:
+      paths: |
+        screenshots/en-US
+        screenshots/fr-FR
+```
+
+The action installs Node.js 22 for its check. It checks only PNG and JPEG files immediately inside each folder, and requires at least one image. Keep each language folder separate so the ten-screenshot limit is assessed within that folder. For other CI systems, use the CLI below.
+
+## Run the CLI
 
 Requires Node.js 22 or newer.
 
