@@ -2,9 +2,12 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { spawnSync } from 'node:child_process'
+import { fileURLToPath } from 'node:url'
 import { checkPaths, inspectBytes, report, sizeClass } from './cli.mjs'
+
+const actionRoot = dirname(fileURLToPath(import.meta.url))
 
 function chunk(type, data = Buffer.alloc(0)) {
   const result = Buffer.alloc(12 + data.length)
@@ -72,13 +75,13 @@ test('GitHub Action runner accepts newline-separated paths including spaces and 
     const locale = join(root, 'English screenshots')
     await mkdir(locale)
     await writeFile(join(locale, 'valid.png'), png(1206, 2622))
-    const env = { ...process.env, GITHUB_ACTION_PATH: process.cwd(), SCREENSHOT_PATHS: `\n${locale}\n` }
-    const pass = spawnSync('bash', ['run-action.sh'], { cwd: process.cwd(), env, encoding: 'utf8' })
+    const env = { ...process.env, GITHUB_ACTION_PATH: actionRoot, SCREENSHOT_PATHS: `\n${locale}\n` }
+    const pass = spawnSync('bash', ['run-action.sh'], { cwd: actionRoot, env, encoding: 'utf8' })
     assert.equal(pass.status, 0, pass.stderr)
     assert.match(pass.stdout, /PASS valid\.png/)
 
     await writeFile(join(locale, 'transparent.png'), png(1206, 2622, 6))
-    const fail = spawnSync('bash', ['run-action.sh'], { cwd: process.cwd(), env, encoding: 'utf8' })
+    const fail = spawnSync('bash', ['run-action.sh'], { cwd: actionRoot, env, encoding: 'utf8' })
     assert.equal(fail.status, 1)
     assert.match(fail.stdout, /PNG alpha\/transparency must be removed/)
   } finally {
