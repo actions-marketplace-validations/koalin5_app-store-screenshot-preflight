@@ -18,3 +18,7 @@ jobs:
         run: |
           test -f action.yml
           test -f run-action.sh
+      - name: Exercise published Action entry point
+        uses: ./
+        with:
+          paths: fixtures/valid-1206x2622.png
