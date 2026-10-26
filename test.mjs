@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { spawnSync } from 'node:child_process'
 import { checkPaths, inspectBytes, report, sizeClass } from './cli.mjs'
 
 function chunk(type, data = Buffer.alloc(0)) {
@@ -60,6 +61,26 @@ test('groups counts by folder and device class, then fails an oversized set', as
     assert.equal(result.failures, 11)
     assert.match(result.lines.join('\n'), /maximum 10 per device size and localization/)
     assert.match(result.lines.join('\n'), /PASS one.png/)
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+test('GitHub Action runner accepts newline-separated paths including spaces and reports failures', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'storestudio-action-'))
+  try {
+    const locale = join(root, 'English screenshots')
+    await mkdir(locale)
+    await writeFile(join(locale, 'valid.png'), png(1206, 2622))
+    const env = { ...process.env, GITHUB_ACTION_PATH: process.cwd(), SCREENSHOT_PATHS: `\n${locale}\n` }
+    const pass = spawnSync('bash', ['run-action.sh'], { cwd: process.cwd(), env, encoding: 'utf8' })
+    assert.equal(pass.status, 0, pass.stderr)
+    assert.match(pass.stdout, /PASS valid\.png/)
+
+    await writeFile(join(locale, 'transparent.png'), png(1206, 2622, 6))
+    const fail = spawnSync('bash', ['run-action.sh'], { cwd: process.cwd(), env, encoding: 'utf8' })
+    assert.equal(fail.status, 1)
+    assert.match(fail.stdout, /PNG alpha\/transparency must be removed/)
   } finally {
     await rm(root, { recursive: true, force: true })
   }
