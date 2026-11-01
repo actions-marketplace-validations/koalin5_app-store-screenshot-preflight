@@ -11,4 +11,13 @@ if [[ ${#paths[@]} -eq 0 ]]; then
   exit 1
 fi
 
-node "$GITHUB_ACTION_PATH/cli.mjs" "${paths[@]}"
+sizes=()
+while IFS= read -r size; do
+  [[ -z "$size" ]] || sizes+=(--require-size "$size")
+done <<< "${SCREENSHOT_REQUIRED_SIZES:-}"
+
+if [[ ${#sizes[@]} -gt 0 ]]; then
+  node "$GITHUB_ACTION_PATH/cli.mjs" "${sizes[@]}" -- "${paths[@]}"
+else
+  node "$GITHUB_ACTION_PATH/cli.mjs" -- "${paths[@]}"
+fi

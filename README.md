@@ -4,7 +4,7 @@ A small, dependency-free Node.js check for iOS and iPadOS screenshot sets. Run i
 
 ## Run it in GitHub Actions
 
-Add a step after checkout. Each line in `paths` is a file or one locale folder; files stay on the GitHub runner. A failed check fails the workflow with the filename and reason.
+Add a step after checkout. Each line in `paths` is a file or one locale folder; nested device folders are scanned too. Files stay on the GitHub runner. A failed check fails the workflow with the filename and reason.
 
 ```yaml
 steps:
@@ -15,9 +15,11 @@ steps:
       paths: |
         screenshots/en-US
         screenshots/fr-FR
+      required_sizes: |
+        1320x2868
 ```
 
-The action installs Node.js 22 for its check. It checks only PNG and JPEG files immediately inside each folder, and requires at least one image. Keep each language folder separate so the ten-screenshot limit is assessed within that folder. For other CI systems, use the CLI below.
+The action installs Node.js 22 for its check. `required_sizes` is optional: use it to catch a missing direct upload file for a display well you intend to fill. Each selected size must have a valid, opaque PNG or JPEG in **each** `paths` entry, so pass one locale root per line. The check does not assume which wells Apple requires for your app; Apple may scale another supported size when your interface is consistent. It scans all nested PNG/JPEG files and requires at least one image. The ten-file limit is assessed within each containing folder and device class.
 
 ## Run the CLI
 
@@ -25,10 +27,10 @@ Requires Node.js 22 or newer.
 
 ```sh
 git clone https://github.com/koalin5/app-store-screenshot-preflight.git
-node app-store-screenshot-preflight/cli.mjs ./screenshots/en-US ./screenshots/fr-FR
+node app-store-screenshot-preflight/cli.mjs --require-size 1320x2868 -- ./screenshots/en-US ./screenshots/fr-FR
 ```
 
-Pass each language folder separately. Only image files immediately inside each folder are checked; nested folders are not scanned. The command exits with status 1 if a file needs attention, which makes it suitable for a CI step:
+Pass each language root separately when using `--require-size`; repeat that flag for more display wells. Nested device folders are scanned. The command exits with status 1 if a file needs attention, which makes it suitable for a CI step:
 
 ```yaml
 - name: Check App Store screenshots

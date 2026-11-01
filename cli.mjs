@@ -86,24 +86,38 @@ async function filesFor(input) {
   const info = await stat(full)
   if (info.isFile()) return [full]
   if (!info.isDirectory()) throw new Error(`${input}: not a file or directory`)
-  const entries = await readdir(full, { withFileTypes: true })
-  return entries.filter((entry) => entry.isFile() && IMAGE.test(entry.name)).map((entry) => join(full, entry.name)).sort()
+  const files = []
+  async function walk(folder) {
+    for (const entry of await readdir(folder, { withFileTypes: true })) {
+      const path = join(folder, entry.name)
+      if (entry.isDirectory()) await walk(path)
+      else if (entry.isFile() && IMAGE.test(entry.name)) files.push(path)
+    }
+  }
+  await walk(full)
+  return files.sort()
 }
 
-export async function checkPaths(inputs) {
+export async function checkPaths(inputs, requiredSizes = []) {
   const sets = new Map()
+  const missing = []
   for (const input of inputs) {
-    for (const file of await filesFor(input)) {
+    const files = await filesFor(input)
+    const validSizes = new Set()
+    for (const file of files) {
       const folder = dirname(file)
       const group = sets.get(folder) ?? []
       let image = null
       let error = null
       try { image = inspectBytes(await readFile(file)) } catch (cause) { error = cause.message }
       const device = image ? sizeClass(image.width, image.height) : null
+      if (image && device && !image.alpha) validSizes.add(`${image.width}x${image.height}`)
       group.push({ file: basename(file), folder, image, device, error })
       sets.set(folder, group)
     }
+    for (const size of requiredSizes) if (!validSizes.has(size)) missing.push(`${input}: no valid ${size} screenshot found`)
   }
+  sets.missing = missing
   return sets
 }
 
@@ -126,19 +140,34 @@ export function report(sets) {
       lines.push(`  ${reasons.length ? 'FAIL' : 'PASS'} ${item.file}${image ? ` — ${image.width}x${image.height} ${image.format}${device ? `, ${device}` : ''}` : ''}${reasons.length ? ` — ${reasons.join('; ')}` : ''}`)
     }
   }
+  for (const item of sets.missing ?? []) { lines.push(`FAIL ${item}`); failures++ }
   lines.push(`${failures ? `${failures} file${failures === 1 ? '' : 's'} need attention` : 'All checked files passed the header, size and per-folder count checks'}. Review each locale and App Store Connect well before submitting.`)
   return { lines, failures }
 }
 
 async function main() {
-  const inputs = process.argv.slice(2)
+  try {
+  const args = process.argv.slice(2)
+  const requiredSizes = []
+  const inputs = []
+  let pathsOnly = false
+  for (let index = 0; index < args.length; index++) {
+    const arg = args[index]
+    if (arg === '--' && !pathsOnly) { pathsOnly = true; continue }
+    if (!pathsOnly && arg === '--require-size') {
+      const size = args[++index]
+      if (!/^\d{2,5}x\d{2,5}$/.test(size ?? '')) throw new Error('Use --require-size WIDTHxHEIGHT, for example 1320x2868')
+      requiredSizes.push(size)
+      continue
+    }
+    inputs.push(arg)
+  }
   if (inputs.includes('--help') || inputs.includes('-h')) {
-    console.log('Usage: node cli.mjs <screenshots-directory> [another-locale-directory ...]')
-    console.log('Checks PNG/JPEG headers, listed modern iPhone/iPad dimensions, PNG transparency and a 10-file limit per folder/device class.')
+    console.log('Usage: node cli.mjs [--require-size WIDTHxHEIGHT ...] -- <screenshots-directory> [another-locale-directory ...]')
+    console.log('Scans nested PNG/JPEG files, checks listed modern iPhone/iPad dimensions, transparency and a 10-file limit per folder/device class. Required sizes must appear as valid files in each input path.')
     return
   }
-  try {
-    const result = report(await checkPaths(inputs.length ? inputs : ['.']))
+    const result = report(await checkPaths(inputs.length ? inputs : ['.'], requiredSizes))
     console.log(result.lines.join('\n'))
     if (result.failures) process.exitCode = 1
   } catch (error) {
