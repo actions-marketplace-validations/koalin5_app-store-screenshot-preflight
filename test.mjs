@@ -71,6 +71,24 @@ test('groups counts by folder and device class, then fails an oversized set', as
   }
 })
 
+test('scans nested locale sets and flags a missing required display size', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'storestudio-locales-'))
+  try {
+    const english = join(root, 'en-US')
+    const french = join(root, 'fr-FR')
+    await mkdir(join(english, 'iphone-6.9'), { recursive: true })
+    await mkdir(join(french, 'iphone-6.3'), { recursive: true })
+    await writeFile(join(english, 'iphone-6.9', '01.png'), png(1320, 2868))
+    await writeFile(join(french, 'iphone-6.3', '01.png'), png(1206, 2622))
+    const result = report(await checkPaths([english, french], ['1320x2868']))
+    assert.equal(result.failures, 1)
+    assert.match(result.lines.join('\n'), /PASS 01\.png — 1320x2868/)
+    assert.match(result.lines.join('\n'), /fr-FR: no valid 1320x2868 screenshot found/)
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
 test('GitHub Action runner accepts newline-separated paths including spaces and reports failures', async () => {
   const root = await mkdtemp(join(tmpdir(), 'storestudio-action-'))
   try {
@@ -86,6 +104,20 @@ test('GitHub Action runner accepts newline-separated paths including spaces and 
     const fail = spawnSync('bash', ['run-action.sh'], { cwd: actionRoot, env, encoding: 'utf8' })
     assert.equal(fail.status, 1)
     assert.match(fail.stdout, /PNG alpha\/transparency must be removed/)
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+test('Action required sizes input fails when a nested locale lacks the selected well', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'storestudio-action-required-'))
+  try {
+    await mkdir(join(root, 'en-US', 'iphone-6.3'), { recursive: true })
+    await writeFile(join(root, 'en-US', 'iphone-6.3', '01.png'), png(1206, 2622))
+    const env = { ...process.env, GITHUB_ACTION_PATH: actionRoot, SCREENSHOT_PATHS: join(root, 'en-US'), SCREENSHOT_REQUIRED_SIZES: '1320x2868' }
+    const fail = spawnSync('bash', ['run-action.sh'], { cwd: actionRoot, env, encoding: 'utf8' })
+    assert.equal(fail.status, 1)
+    assert.match(fail.stdout, /no valid 1320x2868 screenshot found/)
   } finally {
     await rm(root, { recursive: true, force: true })
   }
